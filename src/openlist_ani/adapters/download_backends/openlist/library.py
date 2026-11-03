@@ -43,10 +43,33 @@ def season_number_of(directory_name: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+_ANY_SEASON_EPISODE = re.compile(r"(?<![0-9a-z])s\d+e\d+(?![0-9])", re.IGNORECASE)
+# Fansub-style numbering for files without SxxEyy; the season comes from the
+# folder.  " - 04 ", " - 04v2", "[04]", "第04話", "EP04".
+_BARE_EPISODE = re.compile(
+    r"(?:\s-\s|\[|第|(?<![0-9a-z])ep?\s?)0*(\d{1,4})(?:v\d+)?(?=[\s\].(_]|話|话|集|$)",
+    re.IGNORECASE,
+)
+
+
+def episode_numbers(filename: str, season: int) -> set[int]:
+    """Episode numbers a video filename claims for ``season``."""
+    stem = os.path.splitext(filename)[0]
+    tokens = _ANY_SEASON_EPISODE.findall(stem)
+    if tokens:
+        found = set()
+        for token in tokens:
+            s, e = re.match(r"s(\d+)e(\d+)", token, re.IGNORECASE).groups()
+            if int(s) == season:
+                found.add(int(e))
+        return found
+    return {int(number) for number in _BARE_EPISODE.findall(stem)}
+
+
 def has_episode(filenames: list[str], season: int, episode: int) -> bool:
-    token = re.compile(rf"(?<![0-9a-z])s0*{season}e0*{episode}(?![0-9])", re.IGNORECASE)
     return any(
-        os.path.splitext(name)[1].lower() in _VIDEO_EXTENSIONS and token.search(name)
+        os.path.splitext(name)[1].lower() in _VIDEO_EXTENSIONS
+        and episode in episode_numbers(name, season)
         for name in filenames
     )
 

@@ -143,3 +143,22 @@ def test_jellyfin_notifier_disabled_without_environment(monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
     assert JellyfinNotifier.from_environment() is None
+
+
+def test_has_episode_falls_back_to_fansub_numbering():
+    names = [
+        "[Up to 21°C] 怪人的沙拉碗 - 02 (Baha 1920x1080 AVC AAC MP4) [6F00F247].mp4",
+        "[JOJO&UHA-WING][JoJo - Golden Wind][12][BDRIP 1920x1080].mp4",
+        "Kusuriya no Hitorigoto - 20.mp4",
+        "[XArr] KonoSuba - E03 [WEBDL-1080p].mp4",
+        "[Group] Title 第05話 [1080p].mkv",
+        "[Group] Title - 07v2 [1080p].mkv",
+    ]
+    for episode in (2, 12, 20, 3, 5, 7):
+        assert has_episode(names, 1, episode)
+    for episode in (1, 1080, 1920, 108):
+        assert not has_episode(names, 1, episode)
+    assert not has_episode(["PV2.mkv", "[DBD-Raws][X][NCOP][1080P].mkv"], 1, 2)
+    # An SxxEyy token wins over bare numbers and is season-aware.
+    assert not has_episode(["Title - S02E04 - 04.mkv"], 1, 4)
+    assert has_episode(["Title - S02E04 - 04.mkv"], 2, 4)

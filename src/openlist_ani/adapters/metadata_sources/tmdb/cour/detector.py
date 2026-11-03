@@ -25,22 +25,38 @@ def detect_cours_from_episodes(
 
     dated_episodes.sort(key=lambda x: (x[1], x[0]))
 
-    cours: list[CourGroup] = []
-    current_cour: list[tuple[int, datetime, str]] = [dated_episodes[0]]
+    groups: list[list[tuple[int, datetime, str]]] = [[dated_episodes[0]]]
 
     for entry in dated_episodes[1:]:
         _ep_num, air_date, _air_date_str = entry
-        prev_date = current_cour[-1][1]
+        prev_date = groups[-1][-1][1]
         delta = (air_date - prev_date).days
         if delta >= gap_days:
-            cours.append(_build_cour_group(len(cours) + 1, current_cour))
-            current_cour = []
-        current_cour.append(entry)
+            groups.append([])
+        groups[-1].append(entry)
 
-    if current_cour:
-        cours.append(_build_cour_group(len(cours) + 1, current_cour))
+    groups = _merge_short_groups(groups)
+    return [_build_cour_group(index + 1, group) for index, group in enumerate(groups)]
 
-    return cours
+
+# homelab: a short burst between two cours (delayed or catch-up episodes, e.g.
+# Chitose-kun S01E11-13 aired months after E10) is not a season of its own.
+# Folding it into the previous cour keeps fansub "season 2" on the real next
+# cour.  The last group is left alone: a new cour may list only a few episodes.
+MIN_COUR_EPISODES = 4
+
+
+def _merge_short_groups(
+    groups: list[list[tuple[int, datetime, str]]],
+) -> list[list[tuple[int, datetime, str]]]:
+    merged: list[list[tuple[int, datetime, str]]] = []
+    for index, group in enumerate(groups):
+        is_last = index == len(groups) - 1
+        if merged and not is_last and len(group) < MIN_COUR_EPISODES:
+            merged[-1] = merged[-1] + group
+        else:
+            merged.append(list(group))
+    return merged
 
 
 def _build_cour_group(

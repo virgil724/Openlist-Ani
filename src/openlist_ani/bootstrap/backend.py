@@ -20,6 +20,9 @@ from openlist_ani.adapters.download_backends import (
     OpenListDownloadAdapter,
     OpenListOrganizerAdapter,
 )
+from openlist_ani.adapters.download_backends.openlist.jellyfin import (
+    JellyfinNotifier,
+)
 from openlist_ani.adapters.download_backends.openlist import (
     OpenListClient,
     OpenListHealthCheck,
@@ -428,7 +431,9 @@ def _create_openlist_backend_bundle(
             client=client,
             offline_download_tool=config.downloader.openlist.offline_download_tool,
         ),
-        organizer=OpenListOrganizerAdapter(client),
+        organizer=OpenListOrganizerAdapter(
+            client, jellyfin=JellyfinNotifier.from_environment()
+        ),
         health_check=health.validate,
         close=close if callable(close) else None,
     )

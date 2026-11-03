@@ -18,6 +18,8 @@ from openlist_ani.application.ports import (
 from openlist_ani.domain import DownloadJob
 
 from .client import OpenListClient
+from .jellyfin import JellyfinNotifier
+from .library import OpenListLibraryResolver
 from .storage import OpenListStorageOperations
 
 
@@ -28,10 +30,19 @@ class OpenListOrganizerAdapter:
         self,
         client: OpenListClient,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        *,
+        jellyfin: JellyfinNotifier | None = None,
     ) -> None:
         self._client = client
         self._storage = OpenListStorageOperations(client, sleep)
         self._executor = DurableOrganizationExecutor(self._storage)
+        self._library = OpenListLibraryResolver(client)
+        self._jellyfin = jellyfin
+
+    async def resolve_library_targets(
+        self, base_path: str, requests: tuple[OrganizationRequest, ...]
+    ) -> tuple[OrganizationRequest, ...]:
+        return await self._library.resolve(base_path, requests)
 
     async def organize(
         self,
@@ -92,9 +103,16 @@ class OpenListOrganizerAdapter:
 
         if isinstance(requests, str):
             raise TypeError("organization requests must be a tuple")
-        return await self._executor.organize(
+        results = await self._executor.organize(
             job,
             manifest,
             requests,
             checkpoint_callback,
         )
+        if self._jellyfin is not None:
+            await self._jellyfin.notify(
+                result.final_path
+                for result in results
+                if result.state == "completed" and result.final_path
+            )
+        return results

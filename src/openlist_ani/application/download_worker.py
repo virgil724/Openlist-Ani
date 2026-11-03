@@ -342,6 +342,7 @@ class DownloadWorkerPool:
                 await self._jobs.save(job)
                 await self._apply_collection_policies(job, items)
                 requests = self._build_organization_requests(job, videos, items)
+                requests = await self._resolve_library_targets(job, requests, items)
                 job.artifact["resolved_items"] = items
                 job.artifact["organization_requests"] = [
                     _request_to_dict(request) for request in requests
@@ -352,6 +353,7 @@ class DownloadWorkerPool:
             return
 
         requests = self._build_organization_requests(job, videos, items)
+        requests = await self._resolve_library_targets(job, requests, items)
         job.artifact["resolved_items"] = items
         job.artifact["organization_requests"] = [
             _request_to_dict(request) for request in requests
@@ -609,6 +611,25 @@ class DownloadWorkerPool:
                 winners[stem] = item
             else:
                 _reject_policy_item(item, confirmation_required)
+
+    async def _resolve_library_targets(
+        self,
+        job: DownloadJob,
+        requests: tuple[OrganizationRequest, ...],
+        items: list[dict[str, Any]],
+    ) -> tuple[OrganizationRequest, ...]:
+        """Let the backend fit targets into an existing library before persisting."""
+        resolver = getattr(self._bundle(job).organizer, "resolve_library_targets", None)
+        if resolver is None or not requests:
+            return requests
+        base_path = str(job.artifact.get("base_path") or self._settings.download_path)
+        resolved = tuple(await resolver(base_path, requests))
+        by_key = {request.item_key: request for request in resolved}
+        for item in items:
+            request = by_key.get(str(item.get("item_key")))
+            if request is not None and "target_directory_path" in item:
+                item["target_directory_path"] = request.target_directory_path
+        return resolved
 
     def _build_organization_requests(
         self,

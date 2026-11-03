@@ -67,7 +67,17 @@ class ReleaseFilenamePlanner:
         )
 
 
+def series_directory_name(metadata: ReleaseMetadata) -> str:
+    """Jellyfin-style series folder: ``Name (Year) [tmdbid-N]`` when TMDB is known."""
+    anime_name = sanitize_filename(metadata.anime_name or "Unknown")
+    tmdb_id = str((metadata.external_ids or {}).get("tmdb") or "")
+    if not tmdb_id.isdigit():
+        return anime_name
+    year = f" ({metadata.year})" if metadata.year else ""
+    return f"{anime_name}{year} [tmdbid-{tmdb_id}]"
+
+
 class ReleaseDirectoryPlanner:
     def target_directory_path(self, base_path: str, metadata: ReleaseMetadata) -> str:
-        anime_name = sanitize_filename(metadata.anime_name or "Unknown")
-        return f"{base_path.rstrip('/')}/{anime_name}/Season {metadata.season or 1}"
+        series = series_directory_name(metadata)
+        return f"{base_path.rstrip('/')}/{series}/Season {metadata.season or 1}"

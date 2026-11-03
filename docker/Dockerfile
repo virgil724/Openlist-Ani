@@ -40,8 +40,14 @@ ENV PATH="/opt/openlist-ani/.venv/bin:$PATH" \
 COPY --from=builder --chmod=0555 /opt/openlist-ani/.venv /opt/openlist-ani/.venv
 COPY --from=builder --chmod=0555 /entrypoint.sh /entrypoint.sh
 
-RUN apk add --no-cache nodejs npm ripgrep && \
+ARG CLAUDE_CODE_VERSION=2.1.314
+
+# Claude Code ships a native binary per platform (linux-x64-musl here); its
+# postinstall links it into place, so it cannot use --ignore-scripts.
+RUN apk add --no-cache nodejs npm ripgrep libgcc libstdc++ && \
     npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.82.1 && \
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && \
+    claude --version && \
     npm cache clean --force && \
     addgroup -S -g 1000 openlistani && \
     adduser -S -D -H -u 1000 -G openlistani openlistani && \
@@ -52,6 +58,10 @@ RUN apk add --no-cache nodejs npm ripgrep && \
 ENV CONFIG_PATH=/config.toml
 ENV ENABLE_ASSISTANT=false
 ENV PI_SKIP_VERSION_CHECK=1
+# Use Alpine's ripgrep, skip Claude Code's self-updater and telemetry.
+ENV USE_BUILTIN_RIPGREP=0 \
+    DISABLE_AUTOUPDATER=1 \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 
 USER openlistani
 WORKDIR /

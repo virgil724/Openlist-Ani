@@ -1,0 +1,55 @@
+name: Homelab image
+
+# Builds the homelab fork (library-aware organizer + Claude Code CLI) and pushes
+# ghcr.io/<owner>/openlist-ani:homelab-<sha>. Upstream's publish workflow only
+# runs on v* tags, which this fork does not push.
+
+on:
+  push:
+    branches: [homelab]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: astral-sh/setup-uv@v8.1.0
+      - run: uv python install 3.11
+      - run: uv sync --frozen
+      - run: uv run --frozen --no-sync --no-build ruff check .
+      - run: uv run --frozen --no-sync --no-build black --check .
+      - run: uv run --frozen --no-sync --no-build pytest -q
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Lowercase owner
+        run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          cache-from: type=gha,scope=homelab-amd64
+          cache-to: type=gha,mode=max,scope=homelab-amd64
+          tags: |
+            ghcr.io/${{ env.OWNER }}/openlist-ani:homelab-${{ github.sha }}
+            ghcr.io/${{ env.OWNER }}/openlist-ani:homelab
